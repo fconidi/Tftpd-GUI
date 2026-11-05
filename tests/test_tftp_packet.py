@@ -48,7 +48,7 @@ class TftpPacketTest(unittest.TestCase):
             result = decode(data)
         except TftpError:
             return
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             self.fail(f"decode({data!r}) raised {exc!r}")
         self.assertIsInstance(result, Packet)
 
@@ -58,9 +58,14 @@ class TftpPacketTest(unittest.TestCase):
             head = opcode.to_bytes(2, "big")
             for tail in tails:
                 self._assert_decodes_or_tftp_error(head + tail)
-        for n in (1, 2, 3):
-            for first in range(256):
-                self._assert_decodes_or_tftp_error(bytes([first, 3, 0][:n]))
+        for first in range(256):
+            self._assert_decodes_or_tftp_error(bytes([first]))
+        for first in range(256):
+            for second in range(256):
+                self._assert_decodes_or_tftp_error(bytes([first, second]))
+        for opcode in range(8):
+            for third in range(256):
+                self._assert_decodes_or_tftp_error(bytes([0, opcode, third]))
         rng = random.Random(1234)
         for _ in range(500):
             self._assert_decodes_or_tftp_error(rng.randbytes(rng.randint(0, 64)))
