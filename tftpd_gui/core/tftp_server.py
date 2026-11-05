@@ -6,6 +6,7 @@ root directory descriptor opened once in :meth:`TftpServer.start`.
 
 from __future__ import annotations
 
+import collections
 import ctypes
 import errno
 import logging
@@ -49,6 +50,8 @@ _RECV_SIZE = 65536
 _MODES = ("octet", "netascii")
 _NUMBER = re.compile(r"[0-9]{1,10}")
 _IP_PKTINFO = getattr(socket, "IP_PKTINFO", None)
+MAX_NAME_BYTES = 4096
+RECORD_NAME_CHARS = 255
 
 _NOT_DEFINED = 0
 _ACCESS_VIOLATION = 2
@@ -85,10 +88,16 @@ def _get_libc():
 _SYS_SETGROUPS = {"x86_64": 116, "amd64": 116, "aarch64": 159, "arm64": 159, "riscv64": 159}
 
 
+def _pointer_size() -> int:
+    return ctypes.sizeof(ctypes.c_void_p)
+
+
 def _drop_thread_groups() -> bool:
     """Clear the calling thread's supplementary groups; True when verified."""
+    # platform.machine() names the kernel's architecture; a 32-bit process on
+    # a 64-bit kernel uses another system call table.
     number = _SYS_SETGROUPS.get(platform.machine().lower())
-    if number is None:
+    if number is None or _pointer_size() != 8:
         return False
     libc = _get_libc()
     if libc.syscall(ctypes.c_long(number), ctypes.c_long(0), ctypes.c_void_p(None)) != 0:
@@ -252,7 +261,10 @@ class TftpServer:
         file_gid: int | None = None,
         on_event: Callable[[dict], None] | None = None,
         socket_factory: Callable[..., socket.socket] = socket.socket,
+        max_records: int = 1000,
     ) -> None:
+        if (file_uid is None) != (file_gid is None):
+            raise ValueError("file_uid and file_gid must be given together")
         self.root = Path(root)
         self.port = port
         self.bind_device = bind_device
@@ -265,7 +277,7 @@ class TftpServer:
         self.file_gid = file_gid
         self.on_event = on_event
         self.socket_factory = socket_factory
-        self.transfers: list[dict] = []
+        self.transfers: collections.deque[dict] = collections.deque(maxlen=max_records)
         self._lock = threading.Lock()
         self._stopping = threading.Event()
         self._sock: socket.socket | None = None
@@ -294,7 +306,7 @@ class TftpServer:
             if self._active or self._root_fd is not None:
                 raise RuntimeError("previous transfers are still running")
         self._stopping.clear()
-        root_fd = open_root(self.root)
+        root_fd = self._open_root()
         try:
             sock = self._new_socket()
             try:
@@ -317,6 +329,32 @@ class TftpServer:
                                           name="tftp-listener", daemon=True)
         self._listener.start()
         return sock.getsockname()[1]
+
+    def _open_root(self) -> int:
+        """Open the root, under the file identity when one is configured.
+
+        With an identity, the root's ancestors are checked with the user's
+        permissions too: the open runs in a short-lived thread that switches
+        its own file identity and ends.
+        """
+        if self.file_uid is None:
+            return open_root(self.root)
+        outcome: dict = {}
+
+        def opener() -> None:
+            try:
+                if not _set_fs_identity(self.file_uid, self.file_gid):
+                    raise PermissionError("cannot switch file identity")
+                outcome["fd"] = open_root(self.root)
+            except BaseException as exc:
+                outcome["error"] = exc
+
+        thread = threading.Thread(target=opener, name="tftp-open-root", daemon=True)
+        thread.start()
+        thread.join()
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["fd"]
 
     def stop(self) -> None:
         self._stopping.set()
@@ -374,9 +412,18 @@ class TftpServer:
                 if self._stopping.is_set():
                     break
                 continue
-            self._dispatch(sock, root_fd, data, peer, local)
+            try:
+                self._dispatch(sock, root_fd, data, peer, local)
+            except Exception as exc:
+                _log.exception("TFTP request dispatch failed")
+                self._emit({"event": "error", "error": type(exc).__name__})
 
     def _dispatch(self, sock, root_fd, data, peer, local) -> None:
+        if data[:2] in (b"\x00\x01", b"\x00\x02"):
+            raw_name = data[2:2 + MAX_NAME_BYTES + 1].split(b"\x00", 1)[0]
+            if len(raw_name) > MAX_NAME_BYTES:
+                self._reply_error(sock, peer, _ACCESS_VIOLATION, "file name too long")
+                return
         try:
             packet = decode(data)
         except TftpError:
@@ -398,7 +445,7 @@ class TftpServer:
                 self._threads.add(thread)
         if busy:
             self._reply_error(sock, peer, _NOT_DEFINED, "server busy")
-            self._emit({"event": "busy", "peer": f"{peer[0]}:{peer[1]}", "filename": packet.filename})
+            self._emit({"event": "busy", "peer": f"{peer[0]}:{peer[1]}", "filename": packet.filename[:RECORD_NAME_CHARS]})
             return
         try:
             thread.start()
@@ -428,7 +475,7 @@ class TftpServer:
         started = time.monotonic()
         record = {
             "peer": f"{peer[0]}:{peer[1]}",
-            "filename": packet.filename,
+            "filename": packet.filename[:RECORD_NAME_CHARS],
             "direction": "read" if packet.opcode == RRQ else "write",
             "bytes": 0,
             "seconds": 0.0,

@@ -25,6 +25,15 @@ from tftpd_gui.core.tftp_packet import (
 from tftpd_gui.core.tftp_server import TftpServer, max_transfer_bytes
 
 
+def free_port():
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.bind(("0.0.0.0", 0))
+        return probe.getsockname()[1]
+    finally:
+        probe.close()
+
+
 class Client:
     def __init__(self, port):
         self.server = ("127.0.0.1", port)
@@ -202,6 +211,7 @@ class TftpServerTest(unittest.TestCase):
 
     @unittest.skipUnless(os.geteuid() == 0, "needs root")
     def test_root_only_file_is_refused_when_serving_as_another_user(self):
+        os.chmod(self.base, 0o755)
         os.chmod(self.root, 0o755)
         (self.root / "private").write_bytes(b"secret")
         os.chown(self.root / "private", 0, 0)
@@ -218,6 +228,7 @@ class TftpServerTest(unittest.TestCase):
 
     @unittest.skipUnless(os.geteuid() == 0, "needs root")
     def test_group_readable_file_of_a_server_group_is_refused_when_serving_as_another_user(self):
+        os.chmod(self.base, 0o755)
         os.chmod(self.root, 0o755)
         (self.root / "grouponly").write_bytes(b"secret")
         os.chown(self.root / "grouponly", 0, os.getgid())
@@ -230,11 +241,101 @@ class TftpServerTest(unittest.TestCase):
 
     def test_identity_change_that_does_not_take_effect_answers_error_2(self):
         (self.root / "public").write_bytes(b"public")
-        _, port = self.start(file_uid=65534, file_gid=65534)
+        # the switch made by start() to open the root succeeds, the transfer's does not
+        with mock.patch.object(tftp_server, "_set_fs_identity", side_effect=[True, False]):
+            _, port = self.start(file_uid=65534, file_gid=65534)
         with mock.patch.object(tftp_server, "_set_fs_identity", return_value=False), \
                 mock.patch.object(tftp_server, "open_beneath") as opened:
             self.assertError(self.client(port).read_all("public"), 2)
             opened.assert_not_called()
+
+    @unittest.skipUnless(os.geteuid() == 0, "needs root")
+    def test_root_behind_a_private_parent_is_refused_when_serving_as_another_user(self):
+        os.chmod(self.base, 0o700)
+        os.chmod(self.root, 0o755)
+        port = free_port()
+        server = TftpServer(self.root, port=port, file_uid=65534, file_gid=65534)
+        self.servers.append(server)
+        with self.assertRaises(PermissionError):
+            server.start()
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.bind(("0.0.0.0", port))
+        finally:
+            probe.close()
+
+    @unittest.skipUnless(os.geteuid() == 0, "needs root")
+    def test_root_behind_a_searchable_parent_starts_when_serving_as_another_user(self):
+        os.chmod(self.base, 0o755)
+        os.chmod(self.root, 0o755)
+        (self.root / "public").write_bytes(b"public")
+        os.chmod(self.root / "public", 0o644)
+        _, port = self.start(file_uid=65534, file_gid=65534)
+        self.assertEqual(self.client(port).read_all("public"), b"public")
+
+    def test_file_uid_and_file_gid_must_be_given_together(self):
+        for uid, gid in ((65534, None), (None, 65534)):
+            with self.assertRaises(ValueError):
+                TftpServer(self.root, port=0, file_uid=uid, file_gid=gid)
+
+    def test_groups_are_not_dropped_by_a_32_bit_process(self):
+        with mock.patch.object(tftp_server, "_pointer_size", return_value=4):
+            self.assertFalse(tftp_server._drop_thread_groups())
+
+    def test_overlong_filename_answers_error_2_without_a_record(self):
+        server, port = self.start()
+        client = self.client(port)
+        client.request(RRQ, "a" * 5000, "octet")
+        self.assertError(client.recv(), 2)
+        self.assertError(self.client(port).read_all("missing"), 1)
+        records = self.wait_transfers(server, 1)
+        time.sleep(0.1)
+        self.assertEqual([t["filename"] for t in server.transfers], ["missing"])
+
+    def test_recorded_filename_is_truncated_to_255_characters(self):
+        events = []
+        server, port = self.start(on_event=events.append)
+        packet = self.client(port).read_all("b" * 4000)
+        self.assertEqual(packet.opcode, ERROR)
+        record = self.wait_transfers(server, 1)[0]
+        self.assertLessEqual(len(record["filename"]), 255)
+        self.assertTrue(record["filename"].startswith("bbb"))
+        self.assertTrue(all(len(e.get("filename") or "") <= 255 for e in events))
+
+    def test_transfer_records_are_bounded_by_max_records(self):
+        events = []
+        server, port = self.start(max_records=5, on_event=events.append)
+        for _ in range(8):
+            self.assertError(self.client(port).read_all("missing"), 1)
+        deadline = time.monotonic() + 3
+        while len(events) < 8 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(len(events), 8)
+        self.assertEqual(len(server.transfers), 5)
+        self.assertEqual(len(list(server.transfers)), 5)
+
+    def test_listener_survives_an_unexpected_dispatch_error(self):
+        (self.root / "f").write_bytes(b"hello")
+        events = []
+        server, port = self.start(on_event=events.append)
+        original = server._dispatch
+        calls = []
+
+        def flaky(*args):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("boom")
+            return original(*args)
+
+        server._dispatch = flaky
+        first = self.client(port)
+        first.sock.settimeout(0.3)
+        with self.assertLogs("tftpd_gui.core.tftp_server", "ERROR"):
+            first.request(RRQ, "f", "octet")
+            with self.assertRaises(socket.timeout):
+                first.recv()
+        self.assertEqual(self.client(port).read_all("f"), b"hello")
+        self.assertIn({"event": "error", "error": "RuntimeError"}, events)
 
     def test_blksize_option_is_acknowledged_in_oack(self):
         content = os.urandom(3000)
