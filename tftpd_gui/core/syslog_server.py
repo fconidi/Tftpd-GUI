@@ -32,12 +32,16 @@ _PORT_RETRIES = 5
 _PRI = re.compile(r"<(\d{1,3})>")
 _RFC3164 = re.compile(
     r"[*.]?(?:\d+: )?[*.]?"
-    r"(?P<ts>[A-Z][a-z]{2} [ \d]\d \d\d:\d\d:\d\d(?:\.\d+)?):? "
-    r"(?:(?P<host>[^\s:]+) )?"
-    r"(?P<tag>[^\s:\[]+(?:\[\d+\])?):\s?(?P<msg>.*)",
+    r"(?P<ts>[A-Z][a-z]{2} {1,2}\d{1,2} \d\d:\d\d:\d\d(?:\.\d+)?):? "
+    r"(?P<rest>.*)",
     re.DOTALL,
 )
+_TAG_TOKEN = re.compile(r"[^\s:\[]+(?:\[\d+\])?:")
+_FIRST_TOKEN = re.compile(r"(\S+)(?: (.*))?", re.DOTALL)
 _TOKEN = re.compile(r"(\S+) ?")
+# One RFC 5424 structured-data element that carries at least one parameter.
+_SD_ELEMENT = re.compile(r'\[[^\s=\]"]{1,32}(?: [^\s=\]"]+="(?:[^"\\]|\\.)*")+\]')
+_SD_ANY = re.compile(r'\[[^\s=\]"]{1,32}(?: [^\s=\]"]+="(?:[^"\\]|\\.)*")*\]')
 
 
 def _nil(value: str) -> str | None:
@@ -45,22 +49,23 @@ def _nil(value: str) -> str | None:
 
 
 def _skip_structured_data(text: str) -> str:
-    """Return ``text`` without a leading structured-data field."""
+    """Return ``text`` without a leading structured-data field.
+
+    ``-`` is the nil field. A bracketed element counts as structured data
+    only when it is well formed and carries a parameter, so a message such
+    as ``[ERROR] disk full`` is left alone.
+    """
     if text.startswith("-"):
         return text[1:].lstrip(" ") if text[1:2] in ("", " ") else text
-    pos = 0
-    while text.startswith("[", pos):
-        i = pos + 1
-        while i < len(text):
-            if text[i] == "\\":
-                i += 2
-                continue
-            if text[i] == "]":
-                break
-            i += 1
-        else:
-            return ""  # unterminated element: nothing usable follows
-        pos = i + 1
+    match = _SD_ELEMENT.match(text)
+    if match is None:
+        return text
+    pos = match.end()
+    while True:
+        more = _SD_ANY.match(text, pos)
+        if more is None:
+            break
+        pos = more.end()
     return text[pos:].lstrip(" ")
 
 
@@ -81,6 +86,28 @@ def _parse_5424(rest: str, result: dict) -> bool:
     return True
 
 
+def _parse_3164(rest: str, result: dict) -> None:
+    found = _RFC3164.fullmatch(rest)
+    if found is None:
+        return
+    result["timestamp"] = found.group("ts")
+    token = _FIRST_TOKEN.fullmatch(found.group("rest"))
+    if token is None:
+        result["message"] = found.group("rest")
+        return
+    first, remaining = token.group(1), token.group(2) or ""
+    if _TAG_TOKEN.fullmatch(first):
+        # No host: the first word is already the tag (Cisco style).
+        result["tag"], result["message"] = first[:-1], remaining
+        return
+    result["host"] = first
+    second = _FIRST_TOKEN.fullmatch(remaining)
+    if second is not None and _TAG_TOKEN.fullmatch(second.group(1)):
+        result["tag"], result["message"] = second.group(1)[:-1], second.group(2) or ""
+    else:
+        result["message"] = remaining
+
+
 def parse_line(raw: bytes) -> dict:
     """Split one syslog line; never raises."""
     text = raw.decode("utf-8", errors="replace").rstrip("\r\n")
@@ -95,13 +122,8 @@ def parse_line(raw: bytes) -> dict:
     result["message"] = rest
     if rest.startswith("1 "):
         _parse_5424(rest[2:], result)
-        return result
-    found = _RFC3164.fullmatch(rest)
-    if found is not None:
-        result["timestamp"] = found.group("ts")
-        result["host"] = found.group("host")
-        result["tag"] = found.group("tag")
-        result["message"] = found.group("msg")
+    else:
+        _parse_3164(rest, result)
     return result
 
 
@@ -190,6 +212,11 @@ class SyslogCollector:
     ``on_message`` runs on the receiving thread after the message is stored.
     It must return quickly: a slow callback delays every later message.
     Exceptions it raises are swallowed.
+
+    Memory is bounded twice: by ``capacity`` messages and by ``max_bytes``,
+    the total length of the stored ``raw`` and ``message`` strings. The
+    oldest messages are evicted first. A single message larger than
+    ``max_bytes`` is not stored (``on_message`` still sees it).
     """
 
     def __init__(
@@ -199,7 +226,8 @@ class SyslogCollector:
         bind_device: str | None = None,
         tcp: bool = False,
         capacity: int = 10000,
-        max_line: int = 65536,
+        max_line: int = 8192,
+        max_bytes: int = 32 * 1024 ** 2,
         on_message: Callable[[dict], None] | None = None,
     ) -> None:
         self.port = port
@@ -207,6 +235,8 @@ class SyslogCollector:
         self.tcp = tcp
         self.capacity = capacity
         self.max_line = max_line
+        self.max_bytes = max_bytes
+        self._total = 0
         self.on_message = on_message
         self._lock = threading.Lock()
         self._messages: collections.deque = collections.deque(maxlen=capacity)
@@ -252,7 +282,11 @@ class SyslogCollector:
                 return udp, None
             try:
                 listener = self._bind(socket.SOCK_STREAM, udp.getsockname()[1])
-                listener.listen(socket.SOMAXCONN)
+                try:
+                    listener.listen(socket.SOMAXCONN)
+                except BaseException:
+                    listener.close()
+                    raise
                 return udp, listener
             except PortBusy as exc:
                 udp.close()
@@ -304,8 +338,15 @@ class SyslogCollector:
         message = parse_line(raw)
         message["received"] = time.time()
         message["source"] = source
+        size = len(message["raw"]) + len(message["message"])
         with self._lock:
-            self._messages.append(message)
+            if self.capacity > 0 and size <= self.max_bytes:
+                while self._messages and (len(self._messages) >= self.capacity
+                                          or self._total + size > self.max_bytes):
+                    old = self._messages.popleft()
+                    self._total -= len(old["raw"]) + len(old["message"])
+                self._messages.append(message)
+                self._total += size
         callback = self.on_message
         if callback is not None:
             try:
@@ -329,7 +370,7 @@ class SyslogCollector:
                     continue
             if wanted is not None and (item["host"] or item["source"]).lower() != wanted:
                 continue
-            out.append(item)
+            out.append(dict(item))
         return out
 
     # -- receivers -------------------------------------------------------

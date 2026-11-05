@@ -1,3 +1,4 @@
+import inspect
 import os
 import socket
 import tempfile
@@ -39,6 +40,27 @@ class ParseLineTest(unittest.TestCase):
         self.assertEqual(parsed["timestamp"], "Nov  5 11:00:00.123")
         self.assertEqual(parsed["tag"], "%LINK-3-UPDOWN")
         self.assertEqual(parsed["message"], "up")
+
+    def test_rfc3164_without_tag_keeps_host_and_whole_text(self):
+        parsed = parse_line(b"<189>Nov 5 11:00:00 sw1 link down on port 3: reason")
+        self.assertEqual(parsed["timestamp"], "Nov 5 11:00:00")
+        self.assertEqual(parsed["host"], "sw1")
+        self.assertIsNone(parsed["tag"])
+        self.assertEqual(parsed["message"], "link down on port 3: reason")
+
+    def test_rfc3164_tag_with_pid_is_kept_whole(self):
+        parsed = parse_line(b"<13>Nov  5 11:00:00 box sshd[123]: x")
+        self.assertEqual((parsed["host"], parsed["tag"], parsed["message"]), ("box", "sshd[123]", "x"))
+
+    def test_rfc5424_message_starting_with_bracket_is_not_structured_data(self):
+        parsed = parse_line(b"<34>1 2026-11-05T11:00:00Z host app - - [ERROR] disk full")
+        self.assertEqual(parsed["message"], "[ERROR] disk full")
+
+    def test_rfc5424_structured_data_with_params_is_skipped(self):
+        parsed = parse_line(b'<34>1 2026-11-05T11:00:00Z host app 1 ID [exampleSDID@32473 iut="3"] hello')
+        self.assertEqual(parsed["message"], "hello")
+        parsed = parse_line(b"<34>1 2026-11-05T11:00:00Z host app 1 ID - [ERROR] x")
+        self.assertEqual(parsed["message"], "[ERROR] x")
 
     def test_rfc3164_unmatched_structure_keeps_text_after_priority(self):
         parsed = parse_line(b"<13>just some words")
@@ -170,6 +192,42 @@ class SyslogCollectorTest(CollectorCase):
         self.assertEqual(len(collector.messages(min_severity=None)), 3)
         self.assertEqual(len(collector.messages(host="127.0.0.1")), 3)
         self.assertEqual(len(collector.messages(host="other")), 0)
+
+    def test_returned_messages_cannot_mutate_the_ring(self):
+        collector, port = self.make()
+        self.udp_send(port, b"keep")
+        self.assertTrue(wait_for(lambda: collector.messages()))
+        collector.messages()[0]["raw"] = "changed"
+        self.assertEqual(collector.messages()[0]["raw"], "keep")
+
+    def test_default_max_line_is_8192_and_longer_datagrams_are_cut(self):
+        default = inspect.signature(SyslogCollector).parameters["max_line"].default
+        self.assertEqual(default, 8192)
+        collector, port = self.make()
+        self.udp_send(port, b"C" * 9000)
+        self.assertTrue(wait_for(lambda: len(collector.messages()) == 1))
+        self.assertEqual(len(collector.messages()[0]["raw"]), 8192)
+
+    def test_total_stored_text_is_bounded_by_max_bytes(self):
+        collector = SyslogCollector(port=0, max_bytes=200_000, max_line=65536)
+        for i in range(50):
+            collector._ingest(b"%02d" % i + b"x" * 59_998, "1.2.3.4")
+        stored = collector.messages()
+        total = sum(len(m["raw"]) + len(m["message"]) for m in stored)
+        self.assertLessEqual(total, 200_000)
+        self.assertTrue(stored[-1]["raw"].startswith("49"))
+
+    def test_message_larger_than_max_bytes_is_not_stored(self):
+        collector = SyslogCollector(port=0, max_bytes=1000)
+        collector._ingest(b"y" * 2000, "1.2.3.4")
+        self.assertEqual(collector.messages(), [])
+
+    def test_listen_failure_closes_the_sockets(self):
+        collector = SyslogCollector(port=0, tcp=True)
+        with mock.patch.object(socket.socket, "listen", side_effect=OSError("no")):
+            with self.assertRaises(OSError):
+                collector.start()
+        collector.stop()
 
     def test_messages_returns_a_copy(self):
         collector, port = self.make()
