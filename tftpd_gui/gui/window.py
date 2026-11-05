@@ -39,8 +39,6 @@ class MainWindow(Gtk.ApplicationWindow):
         self._ticks = 0
 
         style.apply()
-        header = Gtk.HeaderBar(show_close_button=True, title=_("app_title"), subtitle="TFTP · DHCP · Syslog")
-        self.set_titlebar(header)
         self.set_icon_name("tftpd-gui")
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

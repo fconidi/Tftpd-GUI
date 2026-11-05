@@ -19,10 +19,6 @@ CSS = b"""
 
 window { background-color: @theme_bg_color; }
 
-headerbar { min-height: 46px; padding: 0 8px; }
-headerbar .title { font-weight: 700; letter-spacing: 0.2px; }
-headerbar .subtitle { opacity: 0.7; font-size: 11px; }
-
 notebook > header { background: transparent; border-bottom: 1px solid alpha(@theme_fg_color, 0.12); padding: 0 12px; }
 notebook > header > tabs > tab {
   padding: 9px 20px; margin: 0 2px; border: none; border-bottom: 3px solid transparent;
