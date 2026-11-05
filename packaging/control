@@ -1,0 +1,13 @@
+Package: tftpd-gui
+Version: @VERSION@
+Architecture: all
+Section: net
+Priority: optional
+Maintainer: Franco Conidi <fconidi@gmail.com>
+Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-3.0, pkexec | policykit-1
+Description: TFTP, DHCP and syslog servers for network equipment
+ Tftpd-GUI is a graphical tool that puts a TFTP server and client, a staging
+ DHCP server and a syslog collector in one window. It is meant for technicians
+ who configure switches, routers and access points from a laptop. The servers
+ run in a small helper authorized through polkit that stops when the window
+ closes.

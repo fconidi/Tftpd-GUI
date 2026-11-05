@@ -1,0 +1,8 @@
+#!/usr/bin/python3
+import sys
+
+sys.path.insert(0, "/usr/lib/tftpd-gui")
+
+from tftpd_gui.__main__ import main  # noqa: E402
+
+sys.exit(main())

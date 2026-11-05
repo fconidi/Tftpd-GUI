@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Tftpd-GUI
+GenericName=TFTP, DHCP and syslog server
+GenericName[it]=Server TFTP, DHCP e syslog
+Comment=The Linux alternative to Tftpd64: TFTP, DHCP and syslog in one window
+Comment[it]=L'alternativa Linux a Tftpd64: TFTP, DHCP e syslog in una finestra
+Exec=tftpd-gui
+Icon=tftpd-gui
+Terminal=false
+Categories=Network;X-SysLinuxOS-Networking;
+Keywords=tftp;dhcp;syslog;network;switch;router;firmware;
+StartupNotify=true

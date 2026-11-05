@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>SysLinuxOS</vendor>
+  <action id="com.syslinuxos.tftpd-gui.serve">
+    <description>Run the Tftpd-GUI network services</description>
+    <description xml:lang="it">Avvia i servizi di rete di Tftpd-GUI</description>
+    <message>Authentication is required to listen on the TFTP, DHCP and syslog ports</message>
+    <message xml:lang="it">Serve l'autenticazione per restare in ascolto sulle porte TFTP, DHCP e syslog</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/tftpd-gui/tftpd-gui-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
+  </action>
+</policyconfig>
