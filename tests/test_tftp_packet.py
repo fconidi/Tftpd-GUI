@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from netserve.core.tftp_packet import (
+from tftpd_gui.core.tftp_packet import (
     OACK,
     RRQ,
     Packet,

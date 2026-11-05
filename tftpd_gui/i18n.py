@@ -5,7 +5,7 @@ DEFAULT_LANGUAGE = "en"
 
 CATALOG = {
     "en": {
-        "app_title": "Network Services",
+        "app_title": "Tftpd-GUI",
         "tab_tftp": "TFTP",
         "tab_dhcp": "DHCP",
         "tab_syslog": "Syslog",
@@ -23,7 +23,7 @@ CATALOG = {
         "syslog_save": "Save log to file",
     },
     "it": {
-        "app_title": "Servizi di rete",
+        "app_title": "Tftpd-GUI",
         "tab_tftp": "TFTP",
         "tab_dhcp": "DHCP",
         "tab_syslog": "Syslog",
@@ -41,7 +41,7 @@ CATALOG = {
         "syslog_save": "Salva il registro su file",
     },
     "fr": {
-        "app_title": "Services réseau",
+        "app_title": "Tftpd-GUI",
         "tab_tftp": "TFTP",
         "tab_dhcp": "DHCP",
         "tab_syslog": "Syslog",
@@ -59,7 +59,7 @@ CATALOG = {
         "syslog_save": "Enregistrer le journal dans un fichier",
     },
     "de": {
-        "app_title": "Netzwerkdienste",
+        "app_title": "Tftpd-GUI",
         "tab_tftp": "TFTP",
         "tab_dhcp": "DHCP",
         "tab_syslog": "Syslog",
@@ -77,7 +77,7 @@ CATALOG = {
         "syslog_save": "Protokoll in Datei speichern",
     },
     "es": {
-        "app_title": "Servicios de red",
+        "app_title": "Tftpd-GUI",
         "tab_tftp": "TFTP",
         "tab_dhcp": "DHCP",
         "tab_syslog": "Syslog",

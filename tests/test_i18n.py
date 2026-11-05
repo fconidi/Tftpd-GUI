@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest import mock
 
-from netserve import i18n
+from tftpd_gui import i18n
 
 
 class I18nTest(unittest.TestCase):
