@@ -109,15 +109,23 @@ def encode_request(
     )
 
 
+def _check_u16(name: str, value: int) -> None:
+    if not 0 <= value <= 0xFFFF:
+        raise ValueError(f"{name} out of range 0..65535: {value}")
+
+
 def encode_data(block: int, payload: bytes) -> bytes:
+    _check_u16("block", block)
     return struct.pack("!HH", DATA, block) + payload
 
 
 def encode_ack(block: int) -> bytes:
+    _check_u16("block", block)
     return struct.pack("!HH", ACK, block)
 
 
 def encode_error(code: int, message: str) -> bytes:
+    _check_u16("error code", code)
     return struct.pack("!HH", ERROR, code) + message.encode() + b"\x00"
 
 
