@@ -97,6 +97,12 @@ CATALOG = {
 }
 
 
+from .i18n_gui import EXTRA as _EXTRA  # noqa: E402
+
+for _lang, _strings in _EXTRA.items():
+    CATALOG[_lang].update(_strings)
+
+
 def current_language() -> str:
     """Return the language code from the environment, or the default."""
     for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
