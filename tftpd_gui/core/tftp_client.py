@@ -164,11 +164,15 @@ def get(
     if dest.is_dir():
         raise IsADirectoryError(errno.EISDIR, "destination is a directory", str(dest))
     server = _resolve(host, port)
-    fd, tmp_name = tempfile.mkstemp(dir=dest.parent, prefix=".tftp-", suffix=".part")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    fd = -1
+    tmp_name = None
     done = False
     try:
-        with os.fdopen(fd, "wb") as out:
+        fd, tmp_name = tempfile.mkstemp(dir=dest.parent, prefix=".tftp-", suffix=".part")
+        out = os.fdopen(fd, "wb")
+        fd = -1
+        with out:
             sock.bind(("0.0.0.0", 0))
             session = _Session(sock, server, timeout, retries, should_cancel)
             request = encode_request(RRQ, filename, "octet", options)
@@ -198,6 +202,9 @@ def get(
                     session.send_error(3, "file too large for 65535 blocks")
                     raise TftpError(3, "file too large for 65535 blocks")
                 block += 1
+                if block > MAX_BLOCK:
+                    session.send_error(3, "file too large for 65535 blocks")
+                    raise TftpError(3, "file too large for 65535 blocks")
                 want = block
                 packet = session.wait(
                     ack, lambda p, want=want: p.opcode == DATA and p.block == want, dup_block=block - 1
@@ -208,7 +215,9 @@ def get(
         return total
     finally:
         sock.close()
-        if not done:
+        if fd >= 0:
+            os.close(fd)
+        if not done and tmp_name is not None:
             try:
                 os.unlink(tmp_name)
             except FileNotFoundError:
@@ -254,12 +263,15 @@ def put(
             size = DEFAULT_BLKSIZE
             if packet.opcode == OACK:
                 size = session.negotiate(packet, blksize)
-                if size_total > max_transfer_bytes(size, 2 ** 63):
-                    session.send_error(3, "file too large for 65535 blocks")
-                    raise TftpError(3, "file too large for 65535 blocks")
+            if size_total > max_transfer_bytes(size, 2 ** 63):
+                session.send_error(3, "file too large for 65535 blocks")
+                raise TftpError(3, "file too large for 65535 blocks")
             sent = 0
             block = 1
             while True:
+                if block > MAX_BLOCK:
+                    session.send_error(3, "file too large for 65535 blocks")
+                    raise TftpError(3, "file too large for 65535 blocks")
                 chunk = src.read(size)
                 raw = encode_data(block, chunk)
                 session.wait(raw, lambda p, want=block: p.opcode == ACK and p.block == want)

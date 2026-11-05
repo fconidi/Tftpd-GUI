@@ -1,3 +1,4 @@
+import errno
 import os
 import socket
 import tempfile
@@ -37,11 +38,11 @@ def free_port():
 class Stub:
     """A hand-written UDP peer: ``main`` takes the request, ``xfer`` answers it."""
 
-    def __init__(self, script):
+    def __init__(self, script, xfer_ip="127.0.0.1"):
         self.main = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.main.bind(("127.0.0.1", 0))
         self.xfer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.xfer.bind(("127.0.0.1", 0))
+        self.xfer.bind((xfer_ip, 0))
         self.port = self.main.getsockname()[1]
         self.log = []
         self.client = None
@@ -98,8 +99,8 @@ class ClientTestCase(unittest.TestCase):
         finally:
             self._tmp.cleanup()
 
-    def stub(self, script):
-        stub = Stub(script)
+    def stub(self, script, xfer_ip="127.0.0.1"):
+        stub = Stub(script, xfer_ip)
         self.stubs.append(stub)
         return stub
 
@@ -336,6 +337,60 @@ class TftpClientTest(ClientTestCase):
             with self.assertRaises(TftpError) as ctx:
                 put("127.0.0.1", src, "huge", port=port)
         self.assertEqual(ctx.exception.code, 3)
+
+    def test_put_ack0_fallback_to_512_enforces_block_limit(self):
+        def script(s):
+            s.recv_request()
+            s.send(encode_ack(0))  # options ignored: 512-byte blocks
+            s.recv()
+
+        stub = self.stub(script)
+        src = self.work / "huge"
+        with open(src, "wb") as f:
+            f.truncate(40 * 1024 * 1024)
+        with self.assertRaises(TftpError) as ctx:
+            put("127.0.0.1", src, "huge", port=stub.port, blksize=1428)
+        self.assertEqual(ctx.exception.code, 3)
+        stub.close()
+        self.assertEqual(stub.log[-1].opcode, ERROR)
+        self.assertEqual(stub.log[-1].error_code, 3)
+
+    def test_get_cleans_up_when_socket_creation_fails(self):
+        dest = self.work / "keep"
+        dest.write_bytes(b"precious")
+        with mock.patch.object(
+            tftp_client.socket, "socket", side_effect=OSError(errno.EMFILE, "too many open files")
+        ):
+            with self.assertRaises(OSError):
+                get("127.0.0.1", "f", dest, port=1)
+        self.assertEqual(dest.read_bytes(), b"precious")
+        self.assertEqual(os.listdir(self.work), ["keep"])
+
+    def test_reply_from_a_different_ip_is_ignored(self):
+        def script(s):
+            s.recv_request()
+            s.send(encode_data(1, b"x"))
+            try:
+                s.recv(timeout=0.5)
+            except socket.timeout:
+                pass
+
+        stub = self.stub(script, xfer_ip="127.0.0.2")
+        with self.assertRaises(TimeoutError):
+            get("127.0.0.1", "f", self.work / "f", port=stub.port, timeout=0.2, retries=1)
+        self.assertEqual(os.listdir(self.work), [])
+
+    def test_garbage_datagram_is_ignored(self):
+        def script(s):
+            s.recv_request()
+            s.send(b"\x00\x09junk")
+            s.send(encode_data(1, b"hello"))
+            s.recv()
+
+        stub = self.stub(script)
+        dest = self.work / "f"
+        self.assertEqual(get("127.0.0.1", "f", dest, port=stub.port), 5)
+        self.assertEqual(dest.read_bytes(), b"hello")
 
     def test_put_of_missing_or_non_regular_source(self):
         with self.assertRaises(FileNotFoundError):
