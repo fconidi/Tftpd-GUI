@@ -12,6 +12,7 @@ from gi.repository import Gtk  # noqa: E402
 
 from ..core.syslog_server import save_messages  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
+from . import style  # noqa: E402
 from .common import error_text  # noqa: E402
 
 SEVERITIES = ("emerg", "alert", "crit", "err", "warning", "notice", "info", "debug")
@@ -24,10 +25,10 @@ class SyslogTab:
         self.running = False
         self.messages: list[dict] = []
 
-        grid = Gtk.Grid(column_spacing=8, row_spacing=6, margin=12)
+        grid = Gtk.Grid(column_spacing=12, row_spacing=10, margin=20)
         buttons = Gtk.Box(spacing=8)
-        self.start_button = Gtk.Button(label=_("start"))
-        self.stop_button = Gtk.Button(label=_("stop"), sensitive=False)
+        self.start_button = style.add_class(Gtk.Button(label=_("start")), "suggested-action")
+        self.stop_button = style.add_class(Gtk.Button(label=_("stop"), sensitive=False), "destructive-action")
         self.tcp_check = Gtk.CheckButton(label=_("syslog_tcp"))
         self.save_button = Gtk.Button(label=_("syslog_save"))
         self.start_button.connect("clicked", lambda *_a: self.start())
@@ -55,7 +56,9 @@ class SyslogTab:
         for index, key in enumerate(("syslog_col_time", "syslog_col_host", "syslog_col_severity",
                                      "syslog_col_message")):
             view.append_column(Gtk.TreeViewColumn(_(key), Gtk.CellRendererText(), text=index))
-        scroll = Gtk.ScrolledWindow(min_content_height=240)
+        style.add_class(view, "log-view")
+        view.set_rules_hint(True)
+        scroll = style.add_class(Gtk.ScrolledWindow(min_content_height=260), "list")
         scroll.add(view)
         grid.attach(scroll, 0, 2, 4, 1)
         self.widget = grid

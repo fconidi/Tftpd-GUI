@@ -11,6 +11,7 @@ from gi.repository import Gtk  # noqa: E402
 
 from ..core.tftp_server import max_transfer_bytes  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
+from . import style  # noqa: E402
 from .common import error_text  # noqa: E402
 
 MIB = 1024 ** 2
@@ -24,7 +25,7 @@ def format_size(size: int) -> str:
 
 
 def _grid() -> Gtk.Grid:
-    grid = Gtk.Grid(column_spacing=8, row_spacing=6, margin=12)
+    grid = Gtk.Grid(column_spacing=12, row_spacing=10, margin=20)
     return grid
 
 
@@ -63,15 +64,15 @@ class TftpTab:
         grid.attach(self.max_spin, 1, row, 2, 1)
         row += 1
 
-        self.limit_label = Gtk.Label(xalign=0, wrap=True)
+        self.limit_label = style.add_class(Gtk.Label(xalign=0, wrap=True), "hint")
         grid.attach(self.limit_label, 0, row, 3, 1)
         row += 1
-        grid.attach(Gtk.Label(label=_("tftp_block_note"), xalign=0, wrap=True), 0, row, 3, 1)
+        grid.attach(style.add_class(Gtk.Label(label=_("tftp_block_note"), xalign=0, wrap=True), "hint"), 0, row, 3, 1)
         row += 1
 
         buttons = Gtk.Box(spacing=8)
-        self.start_button = Gtk.Button(label=_("start"))
-        self.stop_button = Gtk.Button(label=_("stop"), sensitive=False)
+        self.start_button = style.add_class(Gtk.Button(label=_("start")), "suggested-action")
+        self.stop_button = style.add_class(Gtk.Button(label=_("stop"), sensitive=False), "destructive-action")
         self.start_button.connect("clicked", lambda *_a: self.start())
         self.stop_button.connect("clicked", lambda *_a: self.stop())
         buttons.pack_start(self.start_button, False, False, 0)
@@ -79,20 +80,19 @@ class TftpTab:
         grid.attach(buttons, 0, row, 3, 1)
         row += 1
 
-        grid.attach(Gtk.Label(label=_("tftp_transfers"), xalign=0), 0, row, 3, 1)
+        grid.attach(style.add_class(Gtk.Label(label=_("tftp_transfers"), xalign=0), "section-title"), 0, row, 3, 1)
         row += 1
         self.transfers = Gtk.ListStore(str, str, str, str, str)
         view = Gtk.TreeView(model=self.transfers, hexpand=True, vexpand=True)
-        for index, title in enumerate(("peer", "file", "dir", "bytes", "result")):
+        for index, title in enumerate(("Peer", "File", "Dir", "Bytes", "Result")):
             view.append_column(Gtk.TreeViewColumn(title, Gtk.CellRendererText(), text=index))
-        scroll = Gtk.ScrolledWindow(min_content_height=120)
+        view.set_rules_hint(True)
+        scroll = style.add_class(Gtk.ScrolledWindow(min_content_height=130), "list")
         scroll.add(view)
         grid.attach(scroll, 0, row, 3, 1)
         row += 1
 
-        grid.attach(Gtk.Separator(), 0, row, 3, 1)
-        row += 1
-        grid.attach(Gtk.Label(label=_("tftp_client"), xalign=0), 0, row, 3, 1)
+        grid.attach(style.add_class(Gtk.Label(label=_("tftp_client"), xalign=0), "section-title"), 0, row, 3, 1)
         row += 1
         self.host_entry = Gtk.Entry(placeholder_text=_("client_host"))
         self.remote_entry = Gtk.Entry(placeholder_text=_("client_remote"))
@@ -107,7 +107,7 @@ class TftpTab:
         grid.attach(pick, 2, row, 1, 1)
         row += 1
         client_buttons = Gtk.Box(spacing=8)
-        self.get_button = Gtk.Button(label=_("client_get"))
+        self.get_button = style.add_class(Gtk.Button(label=_("client_get")), "suggested-action")
         self.put_button = Gtk.Button(label=_("client_put"))
         self.get_button.connect("clicked", lambda *_a: self.do_get())
         self.put_button.connect("clicked", lambda *_a: self.do_put())

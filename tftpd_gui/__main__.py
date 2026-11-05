@@ -21,6 +21,7 @@ def main() -> int:
                                    text=error_text(exc))
         dialog.run()
         return 1
+    Gtk.Window.set_default_icon_name("tftpd-gui")
     window = MainWindow(helper)
     window.connect("destroy", Gtk.main_quit)
     window.show_all()

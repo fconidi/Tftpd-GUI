@@ -15,7 +15,7 @@ MODULES = (
     "core/dhcp_server.py", "core/errors.py", "core/ifaces.py", "core/protocol.py",
     "core/safe_open.py", "core/syslog_server.py", "core/tftp_client.py",
     "core/tftp_packet.py", "core/tftp_server.py",
-    "gui/__init__.py", "gui/common.py", "gui/dhcp_tab.py", "gui/helper_client.py",
+    "gui/__init__.py", "gui/common.py", "gui/dhcp_tab.py", "gui/helper_client.py", "gui/style.py",
     "gui/syslog_tab.py", "gui/tftp_tab.py", "gui/window.py",
     "helper/__init__.py", "helper/__main__.py", "helper/daemon.py",
 )

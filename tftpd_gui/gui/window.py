@@ -13,6 +13,7 @@ from ..core import tftp_client  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
 from .common import thread_runner  # noqa: E402
 from .dhcp_tab import DhcpTab  # noqa: E402
+from . import style  # noqa: E402
 from .syslog_tab import SyslogTab  # noqa: E402
 from .tftp_tab import TftpTab  # noqa: E402
 
@@ -37,6 +38,11 @@ class MainWindow(Gtk.ApplicationWindow):
         self._helper_closed = False
         self._ticks = 0
 
+        style.apply()
+        header = Gtk.HeaderBar(show_close_button=True, title=_("app_title"), subtitle="TFTP · DHCP · Syslog")
+        self.set_titlebar(header)
+        self.set_icon_name("tftpd-gui")
+
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add(box)
         self.infobar = Gtk.InfoBar(no_show_all=True, show_close_button=True)
@@ -52,8 +58,14 @@ class MainWindow(Gtk.ApplicationWindow):
         for tab, key in ((self.tftp_tab, "tab_tftp"), (self.dhcp_tab, "tab_dhcp"), (self.syslog_tab, "tab_syslog")):
             self.notebook.append_page(tab.widget, Gtk.Label(label=_(key)))
         box.pack_start(self.notebook, True, True, 0)
-        self.status = Gtk.Label(xalign=0, margin=6)
-        box.pack_start(self.status, False, False, 0)
+        bar = Gtk.Box(valign=Gtk.Align.CENTER)
+        style.add_class(bar, "status-bar")
+        self.status_dot = Gtk.Box(valign=Gtk.Align.CENTER)
+        style.add_class(self.status_dot, "status-dot")
+        self.status = Gtk.Label(xalign=0)
+        bar.pack_start(self.status_dot, False, False, 0)
+        bar.pack_start(self.status, True, True, 0)
+        box.pack_start(bar, False, False, 0)
 
         self.connect("destroy", lambda *_a: self.close_helper())
         self.update_status()
@@ -90,6 +102,11 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.syslog_tab.running:
             names.append("Syslog 514")
         self.status.set_text(_("status_listening", services=", ".join(names)) if names else _("status_idle"))
+        dot = self.status_dot.get_style_context()
+        if names:
+            dot.add_class("on")
+        else:
+            dot.remove_class("on")
 
     # -- periodic work ---------------------------------------------------
 

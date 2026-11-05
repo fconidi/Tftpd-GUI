@@ -5,10 +5,11 @@ from __future__ import annotations
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
 from ..core.ifaces import list_interfaces  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
+from . import style  # noqa: E402
 from .common import error_text  # noqa: E402
 
 
@@ -26,13 +27,9 @@ class DhcpTab:
         self.auto_stop_seconds = 0
         self.server_ip = self.netmask = ""
 
-        grid = Gtk.Grid(column_spacing=8, row_spacing=6, margin=12)
+        grid = Gtk.Grid(column_spacing=12, row_spacing=10, margin=20)
         self.banner = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
-        self.banner.get_style_context().add_class("dhcp-banner")
-        provider = Gtk.CssProvider()
-        provider.load_from_data(b".dhcp-banner { background: #b00020; color: white; padding: 8px; font-weight: bold; }")
-        Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        style.add_class(self.banner, "dhcp-banner")
         grid.attach(self.banner, 0, 0, 2, 1)
 
         def add(row, label, widget):
@@ -53,23 +50,25 @@ class DhcpTab:
         self.autostop_spin = add(9, _("dhcp_autostop_minutes"), Gtk.SpinButton.new_with_range(0, 1440, 5))
         self.autostop_spin.set_value(30)
         self.address_label = Gtk.Label(xalign=0, wrap=True)
+        style.add_class(self.address_label, "hint")
         grid.attach(self.address_label, 0, 10, 2, 1)
 
         buttons = Gtk.Box(spacing=8)
-        self.start_button = Gtk.Button(label=_("start"))
-        self.stop_button = Gtk.Button(label=_("stop"), sensitive=False)
+        self.start_button = style.add_class(Gtk.Button(label=_("start")), "suggested-action")
+        self.stop_button = style.add_class(Gtk.Button(label=_("stop"), sensitive=False), "destructive-action")
         self.start_button.connect("clicked", lambda *_a: self.request_start())
         self.stop_button.connect("clicked", lambda *_a: self.stop())
         buttons.pack_start(self.start_button, False, False, 0)
         buttons.pack_start(self.stop_button, False, False, 0)
         grid.attach(buttons, 0, 11, 2, 1)
 
-        grid.attach(Gtk.Label(label=_("dhcp_leases"), xalign=0), 0, 12, 2, 1)
+        grid.attach(style.add_class(Gtk.Label(label=_("dhcp_leases"), xalign=0), "section-title"), 0, 12, 2, 1)
         self.leases = Gtk.ListStore(str, str, str)
         view = Gtk.TreeView(model=self.leases, hexpand=True, vexpand=True)
         for index, title in enumerate(("IP", "MAC", "Host")):
             view.append_column(Gtk.TreeViewColumn(title, Gtk.CellRendererText(), text=index))
-        scroll = Gtk.ScrolledWindow(min_content_height=120)
+        view.set_rules_hint(True)
+        scroll = style.add_class(Gtk.ScrolledWindow(min_content_height=140), "list")
         scroll.add(view)
         grid.attach(scroll, 0, 13, 2, 1)
 
