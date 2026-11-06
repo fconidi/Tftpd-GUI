@@ -19,7 +19,13 @@ sudo apt update
 sudo apt install tftpd-gui
 ```
 
-Alternatively, download the `.deb` from [Releases](https://github.com/fconidi/Tftpd-GUI/releases) and install it with `sudo apt install ./tftpd-gui_<version>_all.deb`. The package needs Python 3.11 or newer, GTK 3 and polkit.
+Alternatively, download the [tftpd-gui 0.1.0 Debian package](https://github.com/fconidi/Tftpd-GUI/releases/download/v0.1.0/tftpd-gui_0.1.0_all.deb), then install it from the download directory:
+
+```bash
+sudo apt install ./tftpd-gui_0.1.0_all.deb
+```
+
+Other versions are listed on the [Releases page](https://github.com/fconidi/Tftpd-GUI/releases). The package needs Python 3.11 or newer, GTK 3 and polkit.
 
 Start it from the SysLinuxOS Tools menu or run `tftpd-gui`. The service helper requests administrator authorization because DHCP, TFTP and syslog use ports below 1024. Closing the window stops the helper and its services.
 
