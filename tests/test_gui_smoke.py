@@ -94,6 +94,20 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(self.window.notebook.get_n_pages(), 3)
         self.assertEqual(self.window.status.get_text(), translate("status_idle"))
 
+    def test_helper_exit_clears_all_service_states(self):
+        self.tftp._set_running(True, 69)
+        self.dhcp._set_running(True)
+        self.syslog._set_running(True)
+        self.helper.events = [{"event": "helper_exited"}]
+        self.window.tick()
+        self.assertFalse(self.tftp.running)
+        self.assertFalse(self.dhcp.running)
+        self.assertFalse(self.syslog.running)
+        self.assertEqual(self.window.status.get_text(), translate("status_idle"))
+        self.assertIn(translate("helper_exited"), self.notice_texts())
+        self.assertTrue(self.helper.closed)
+        self.assertFalse(self.tftp.start_button.get_sensitive())
+
     def test_tftp_start_sends_the_chosen_root_interface_write_flag_and_max_bytes(self):
         self.tftp.set_interfaces(["eth0"])
         self.tftp.iface_combo.set_active(1)

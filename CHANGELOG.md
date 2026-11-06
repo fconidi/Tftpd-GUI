@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Reject DHCP address pools that contain the gateway and avoid consuming a different lease when a requested address is unavailable.
+- Close the DHCP socket when automatic stop expires and update the window if the service helper exits.
+- Keep TFTP downloads private to the local user and acknowledge a retransmitted final upload block.
+
 ## 0.1.0
 
 - First version.

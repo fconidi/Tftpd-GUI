@@ -174,6 +174,22 @@ class TftpServerTest(unittest.TestCase):
         self.wait_transfers(server)
         self.assertEqual((self.root / "new.cfg").read_bytes(), content)
 
+    def test_duplicate_final_data_receives_the_final_ack_again(self):
+        _, port = self.start(allow_write=True)
+        client = self.client(port)
+        client.request(WRQ, "retry.cfg")
+        initial = client.recv()
+        self.assertEqual((initial.opcode, initial.block), (ACK, 0))
+        final_data = encode_data(1, b"configuration")
+        client.send(final_data)
+        first = client.recv()
+        self.assertEqual((first.opcode, first.block), (ACK, 1))
+        time.sleep(tftp_server.DEFAULT_TIMEOUT + 0.1)
+        client.send(final_data)
+        second = client.recv()
+        self.assertEqual((second.opcode, second.block), (ACK, 1))
+        self.assertEqual((self.root / "retry.cfg").read_bytes(), b"configuration")
+
     def test_existing_file_is_not_overwritten_by_default(self):
         (self.root / "cfg").write_bytes(b"old")
         _, port = self.start(allow_write=True)

@@ -78,6 +78,12 @@ class HelperClientTest(unittest.TestCase):
             client.call("status")
         self.assertIn(ctx.exception.code, ("helper_exited", "access_denied"))
 
+    def test_helper_death_emits_an_event_for_the_window(self):
+        client = self.client()
+        os.kill(client.pid, signal.SIGKILL)
+        self.assertTrue(client._ended.wait(3))
+        self.assertIn({"event": "helper_exited"}, client.poll_events())
+
     def test_missing_command_raises_helper_unavailable(self):
         with self.assertRaises(HelperError) as ctx:
             HelperClient(["/nonexistent/helper"]).start()

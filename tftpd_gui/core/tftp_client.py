@@ -209,7 +209,6 @@ def get(
                 packet = session.wait(
                     ack, lambda p, want=want: p.opcode == DATA and p.block == want, dup_block=block - 1
                 )
-            os.fchmod(out.fileno(), 0o644)
         os.replace(tmp_name, dest)
         done = True
         return total

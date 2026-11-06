@@ -63,6 +63,7 @@ class HelperClient:
                         waiter.put(message)
         finally:
             self._ended.set()
+            self._push_event({"event": "helper_exited"})
             with self._lock:
                 waiters, self._pending = list(self._pending.values()), {}
             for waiter in waiters:

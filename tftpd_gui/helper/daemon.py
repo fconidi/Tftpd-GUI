@@ -256,6 +256,9 @@ class Daemon:
         return {"port": port, **self._dhcp_info}
 
     def _dhcp_event(self, event: dict) -> None:
+        if event.get("event") == "stopped":
+            self._dhcp = None
+            self._pool = None
         self.emit("dhcp", event)
 
     def _stop_dhcp(self, args: dict) -> dict:

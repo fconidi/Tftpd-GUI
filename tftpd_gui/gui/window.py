@@ -124,6 +124,14 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.syslog_tab.on_event(data)
             elif kind == "dropped":
                 self.notice(_("error_generic", code=f"dropped {data.get('count', '?')}"), "warning")
+            elif kind == "helper_exited" and not self._helper_closed:
+                self.tftp_tab._set_running(False)
+                self.dhcp_tab._set_running(False)
+                self.syslog_tab._set_running(False)
+                self.notice(_("helper_exited"), "error")
+                for tab in (self.tftp_tab, self.dhcp_tab, self.syslog_tab):
+                    tab.start_button.set_sensitive(False)
+                self.close_helper()
         self.dhcp_tab.update_banner()
         self._ticks += 1
         if self.dhcp_tab.running and self._ticks % _LEASE_EVERY == 0:

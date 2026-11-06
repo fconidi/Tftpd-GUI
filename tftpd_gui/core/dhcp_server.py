@@ -66,11 +66,14 @@ def validate_config(
         raise DhcpConfigError("pool_contains_server", "pool contains the server address")
     if router is not None:
         try:
-            inside = _ipv4(router) in network
+            gateway = _ipv4(router)
+            inside = gateway in network
         except ValueError:
             inside = False
         if not inside:
             raise DhcpConfigError("gateway_outside_subnet", "gateway is not inside the subnet")
+        if first <= gateway <= last:
+            raise DhcpConfigError("pool_contains_gateway", "pool contains the gateway address")
     for entry in dns:
         try:
             _ipv4(entry)
@@ -236,7 +239,7 @@ class DhcpServer:
         if not self.pool.contains(ip):
             return None  # someone else's address: stay silent, never NAK
         if self.pool.confirm(mac, ip) or (
-            self.pool.owner(ip) is None and self.pool.acquire(mac, ip, hostname) == ip
+            self.pool.owner(ip) is None and self.pool.acquire(mac, ip, hostname, exact=True) == ip
         ):
             self._emit({"event": "ack", "mac": label, "ip": ip})
             reply = self._reply_packet(request, dp.ACK, ip, ciaddr=request.ciaddr)
@@ -270,7 +273,7 @@ class DhcpServer:
             return
         if self._clock() - self._started_at >= self.auto_stop_seconds:
             self._timed_out = True
-            self._stopping.set()
+            self.stop()
             self._emit({"event": "stopped", "reason": "timeout"})
 
     def _new_socket(self) -> socket.socket:

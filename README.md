@@ -19,10 +19,10 @@ sudo apt update
 sudo apt install tftpd-gui
 ```
 
-Alternatively, download the [tftpd-gui 0.1.0 Debian package](https://github.com/fconidi/Tftpd-GUI/releases/download/v0.1.0/tftpd-gui_0.1.0_all.deb), then install it from the download directory:
+Alternatively, download the Debian package from the [Releases page](https://github.com/fconidi/Tftpd-GUI/releases), then install it from the download directory:
 
 ```bash
-sudo apt install ./tftpd-gui_0.1.0_all.deb
+sudo apt install ./tftpd-gui_0.1.1_all.deb
 ```
 
 Other versions are listed on the [Releases page](https://github.com/fconidi/Tftpd-GUI/releases). The package needs Python 3.11 or newer, GTK 3 and polkit.

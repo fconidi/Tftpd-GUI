@@ -624,9 +624,42 @@ class TftpServer:
                 except OSError:
                     self._unlink(dir_fd, target)
                     raise TftpError(_ACCESS_VIOLATION, "cannot replace the file") from None
-            channel.send(encode_ack(last_block))
+            final_ack = encode_ack(last_block)
+            channel.send(final_ack)
+            self._wait_final_retransmission(channel, last_block, final_ack)
         finally:
             os.close(dir_fd)
+
+    @staticmethod
+    def _wait_final_retransmission(channel: _Channel, block: int, ack: bytes) -> None:
+        """Keep the transfer socket alive for a lost final ACK."""
+        deadline = time.monotonic() + min(channel.timeout + _POLL * 4, channel.idle_seconds)
+        while not channel.stopping.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            channel.sock.settimeout(min(_POLL, remaining))
+            try:
+                data, addr = channel.sock.recvfrom(_RECV_SIZE)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            if addr != channel.peer:
+                try:
+                    channel.sock.sendto(encode_error(_UNKNOWN_TID, "unknown transfer ID"), addr)
+                except OSError:
+                    pass
+                continue
+            try:
+                packet = decode(data)
+            except TftpError:
+                continue
+            if packet.opcode == DATA and packet.block == block:
+                try:
+                    channel.send(ack)
+                except OSError:
+                    return
 
     @staticmethod
     def _unlink(dir_fd: int, name: str) -> None:

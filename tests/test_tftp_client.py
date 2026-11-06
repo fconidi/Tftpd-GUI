@@ -118,6 +118,7 @@ class TftpClientTest(ClientTestCase):
         dest = self.work / "a.txt"
         self.assertEqual(get("127.0.0.1", "a.txt", dest, port=port), 11)
         self.assertEqual(dest.read_bytes(), b"hello world")
+        self.assertEqual(dest.stat().st_mode & 0o777, 0o600)
 
     def test_get_of_a_missing_file_raises_error_1(self):
         port = self.real_server()

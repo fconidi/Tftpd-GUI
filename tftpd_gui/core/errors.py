@@ -10,7 +10,7 @@ class DhcpConfigError(Exception):
     """A DHCP configuration that must not be started.
 
     ``code`` is one of: no_ipv4, mask_invalid, pool_reversed,
-    pool_outside_subnet, pool_contains_server, gateway_outside_subnet,
+    pool_outside_subnet, pool_contains_server, pool_contains_gateway, gateway_outside_subnet,
     dns_invalid.
     """
 

@@ -56,16 +56,18 @@ class LeasePool:
 
     # -- public ----------------------------------------------------------
 
-    def acquire(self, mac: bytes, requested: str | None = None, hostname: str | None = None) -> str | None:
+    def acquire(self, mac: bytes, requested: str | None = None, hostname: str | None = None,
+                *, exact: bool = False) -> str | None:
         with self._lock:
             self._purge()
             ip = None
             current = self._leases.get(mac)
             if current is not None:
-                ip = current["ip"]
+                if not exact or current["ip"] == requested:
+                    ip = current["ip"]
             elif requested and self.contains(requested) and self._free(requested):
                 ip = requested
-            else:
+            elif not exact:
                 for value in range(self._first, self._last + 1):
                     candidate = str(ipaddress.IPv4Address(value))
                     if self._free(candidate):

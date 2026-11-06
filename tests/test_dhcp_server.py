@@ -160,6 +160,14 @@ class DhcpServerTest(unittest.TestCase):
         self.assertIsNone(self.reply(request(dp.DECLINE, o54=ip(SERVER), o50=ip(wanted))))
         self.assertNotEqual(self.pool.acquire(MAC1), wanted)
 
+    def test_request_for_declined_address_does_not_consume_another_lease(self):
+        wanted = self.offer_for()
+        self.reply(request(dp.DECLINE, o54=ip(SERVER), o50=ip(wanted)))
+        for mac in (MAC1, MAC2):
+            reply = self.reply(request(dp.REQUEST, mac, o54=ip(SERVER), o50=ip(wanted)))
+            self.assertEqual(dp.message_type(reply), dp.NAK)
+        self.assertEqual(self.pool.leases(), [])
+
     def test_decline_naming_another_server_is_ignored(self):
         wanted = self.offer_for()
         self.reply(request(dp.DECLINE, o54=ip(OTHER), o50=ip(wanted)))
@@ -221,6 +229,15 @@ class DhcpServerTest(unittest.TestCase):
         self.server.tick()
         self.server.tick()
         self.assertEqual(self.events, [{"event": "stopped", "reason": "timeout"}])
+
+    def test_auto_stop_closes_the_listening_socket(self):
+        fake = FakeSocket()
+        self.server = self.make(auto_stop_seconds=60, socket_factory=lambda *_a: fake)
+        self.server.start()
+        self.clock.now = 61
+        self.server.tick()
+        self.assertTrue(fake.closed)
+        self.assertIsNone(self.server._sock)
 
     def test_auto_stop_can_be_disabled(self):
         self.server = self.make(auto_stop_seconds=None)
@@ -308,6 +325,9 @@ class ValidateConfigTest(unittest.TestCase):
         self.check("gateway_outside_subnet", router="bad")
         self.check("dns_invalid", dns=("2001:db8::1",))
         self.check("dns_invalid", dns=("8.8.8.8", "x"))
+
+    def test_gateway_inside_pool_is_refused(self):
+        self.check("pool_contains_gateway", router="192.168.50.105")
 
     def test_invalid_netmask_is_refused(self):
         self.check("mask_invalid", netmask="255.0.255.0")

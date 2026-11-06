@@ -89,6 +89,14 @@ class Session:
 
 
 class HelperDaemonTest(unittest.TestCase):
+    def test_dhcp_timeout_removes_the_service_from_status(self):
+        helper = Daemon(io.BytesIO(), {})
+        helper._dhcp = object()
+        helper._pool = object()
+        helper._dhcp_event({"event": "stopped", "reason": "timeout"})
+        self.assertFalse(helper._status({})["dhcp"]["running"])
+        self.assertIsNone(helper._pool)
+
     def tmpdir(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
