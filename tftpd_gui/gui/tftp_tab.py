@@ -14,7 +14,7 @@ from ..core.ifaces import list_interfaces  # noqa: E402
 from ..core.tftp_server import max_transfer_bytes  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
 from . import style  # noqa: E402
-from .common import error_text  # noqa: E402
+from .common import chosen_interface, error_text, fill_interface_combo  # noqa: E402
 
 MIB = 1024 ** 2
 _BLOCKS = (512, 1428, 8192)
@@ -138,16 +138,10 @@ class TftpTab:
         dialog.destroy()
 
     def set_interfaces(self, names: list[str]) -> None:
-        self.iface_combo.remove_all()
-        self.iface_combo.append_text(_("all_interfaces"))
-        for name in names:
-            self.iface_combo.append_text(name)
-        self.iface_combo.set_active(0)
+        fill_interface_combo(self.iface_combo, names)
 
     def interface(self) -> str | None:
-        if self.iface_combo.get_active() <= 0:
-            return None
-        return self.iface_combo.get_active_text()
+        return chosen_interface(self.iface_combo)
 
     def max_bytes(self) -> int:
         return int(self.max_spin.get_value()) * MIB

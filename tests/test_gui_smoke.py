@@ -369,6 +369,22 @@ class GuiSmokeTest(unittest.TestCase):
         self.syslog.stop()
         self.assertEqual(self.helper.names(), ["start_syslog", "stop_syslog"])
 
+    def test_syslog_interface_menu_offers_all_interfaces_then_loopback(self):
+        names = [row[0] for row in self.syslog.iface_combo.get_model()]
+        self.assertEqual(names[0], translate("all_interfaces"))
+        self.assertEqual(names[1], "lo")
+
+    def test_syslog_listens_on_every_interface_by_default(self):
+        self.syslog.start()
+        self.assertEqual(self.helper.calls[0], ("start_syslog", dict(port=514, tcp=False, interface=None)))
+
+    def test_syslog_start_can_bind_to_the_chosen_interface(self):
+        names = [row[0] for row in self.syslog.iface_combo.get_model()]
+        self.syslog.iface_combo.set_active(names.index("lo"))
+        self.syslog.tcp_check.set_active(True)
+        self.syslog.start()
+        self.assertEqual(self.helper.calls[0], ("start_syslog", dict(port=514, tcp=True, interface="lo")))
+
     def test_port_busy_error_is_shown_with_its_port_number(self):
         self.helper.errors["start_tftp"] = HelperError("port_busy", 69)
         self.tftp.root_entry.set_text("/srv")

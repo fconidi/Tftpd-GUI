@@ -10,10 +10,11 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402
 
+from ..core.ifaces import list_interfaces  # noqa: E402
 from ..core.syslog_server import save_messages  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
 from . import style  # noqa: E402
-from .common import error_text  # noqa: E402
+from .common import chosen_interface, error_text, fill_interface_combo  # noqa: E402
 
 SEVERITIES = ("emerg", "alert", "crit", "err", "warning", "notice", "info", "debug")
 MAX_ROWS = 10000
@@ -26,6 +27,9 @@ class SyslogTab:
         self.messages: list[dict] = []
 
         grid = Gtk.Grid(column_spacing=12, row_spacing=10, margin=20)
+        grid.attach(Gtk.Label(label=_("interface"), xalign=0), 0, 0, 1, 1)
+        self.iface_combo = Gtk.ComboBoxText()
+        grid.attach(self.iface_combo, 1, 0, 3, 1)
         buttons = Gtk.Box(spacing=8)
         self.start_button = style.add_class(Gtk.Button(label=_("start")), "suggested-action")
         self.stop_button = style.add_class(Gtk.Button(label=_("stop"), sensitive=False), "destructive-action")
@@ -36,20 +40,20 @@ class SyslogTab:
         self.save_button.connect("clicked", lambda *_a: self._choose_and_save())
         for widget in (self.start_button, self.stop_button, self.tcp_check, self.save_button):
             buttons.pack_start(widget, False, False, 0)
-        grid.attach(buttons, 0, 0, 4, 1)
+        grid.attach(buttons, 0, 1, 4, 1)
 
-        grid.attach(Gtk.Label(label=_("syslog_filter"), xalign=0), 0, 1, 1, 1)
+        grid.attach(Gtk.Label(label=_("syslog_filter"), xalign=0), 0, 2, 1, 1)
         self.filter_entry = Gtk.Entry(hexpand=True)
         self.filter_entry.connect("changed", lambda *_a: self.refilter())
-        grid.attach(self.filter_entry, 1, 1, 1, 1)
-        grid.attach(Gtk.Label(label=_("syslog_severity"), xalign=0), 2, 1, 1, 1)
+        grid.attach(self.filter_entry, 1, 2, 1, 1)
+        grid.attach(Gtk.Label(label=_("syslog_severity"), xalign=0), 2, 2, 1, 1)
         self.severity_combo = Gtk.ComboBoxText()
         self.severity_combo.append_text(_("syslog_any"))
         for name in SEVERITIES:
             self.severity_combo.append_text(name)
         self.severity_combo.set_active(0)
         self.severity_combo.connect("changed", lambda *_a: self.refilter())
-        grid.attach(self.severity_combo, 3, 1, 1, 1)
+        grid.attach(self.severity_combo, 3, 2, 1, 1)
 
         self.store = Gtk.ListStore(str, str, str, str)
         view = Gtk.TreeView(model=self.store, hexpand=True, vexpand=True)
@@ -60,8 +64,15 @@ class SyslogTab:
         view.set_rules_hint(True)
         scroll = style.add_class(Gtk.ScrolledWindow(min_content_height=260), "list")
         scroll.add(view)
-        grid.attach(scroll, 0, 2, 4, 1)
+        grid.attach(scroll, 0, 3, 4, 1)
         self.widget = grid
+        self.set_interfaces(list_interfaces(include_loopback=True))
+
+    def set_interfaces(self, names: list[str]) -> None:
+        fill_interface_combo(self.iface_combo, names)
+
+    def interface(self) -> str | None:
+        return chosen_interface(self.iface_combo)
 
     # -- filter ----------------------------------------------------------
 
@@ -104,9 +115,9 @@ class SyslogTab:
         self.window.update_status()
 
     def start(self) -> None:
-        tcp = self.tcp_check.get_active()
+        tcp, interface = self.tcp_check.get_active(), self.interface()
         self.window.run_async(
-            lambda: self.window.helper.call("start_syslog", port=514, tcp=tcp),
+            lambda: self.window.helper.call("start_syslog", port=514, tcp=tcp, interface=interface),
             lambda result, error: self.window.notice(error_text(error), "error") if error
             else self._set_running(True))
 

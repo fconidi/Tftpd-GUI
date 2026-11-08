@@ -27,6 +27,20 @@ def error_text(exc: Exception) -> str:
     return translate("error_generic", code=type(exc).__name__)
 
 
+def fill_interface_combo(combo, names: list[str]) -> None:
+    """Fill an interface menu: "All interfaces" first, then ``names``."""
+    combo.remove_all()
+    combo.append_text(translate("all_interfaces"))
+    for name in names:
+        combo.append_text(name)
+    combo.set_active(0)
+
+
+def chosen_interface(combo) -> str | None:
+    """The interface picked in the menu, or None for "All interfaces"."""
+    return None if combo.get_active() <= 0 else combo.get_active_text()
+
+
 def thread_runner(work: Callable[[], object], done: Callable[[object, Exception | None], None]) -> None:
     """Run ``work`` on a thread and deliver ``done(result, error)`` on the GTK main loop."""
     from gi.repository import GLib

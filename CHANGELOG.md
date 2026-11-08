@@ -2,7 +2,7 @@
 
 ## 0.1.2
 
-- The TFTP tab now lists the network interfaces, loopback included, so the server can be limited to one of them or to this computer only.
+- The TFTP and Syslog tabs now list the network interfaces, loopback included, so a server can be limited to one of them or to this computer only. Syslog used to listen on every interface with no way to choose.
 - Ask for confirmation before sharing the home folder, one of its parent folders or a folder that holds `.ssh` or `.gnupg`.
 - Show the server's own message in a failed TFTP transfer, for example "file not found (1)", instead of the bare error code.
 
