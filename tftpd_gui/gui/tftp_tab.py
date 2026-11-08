@@ -9,6 +9,8 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402
 
+from ..core.exposure import sensitive_folder_reason  # noqa: E402
+from ..core.ifaces import list_interfaces  # noqa: E402
 from ..core.tftp_server import max_transfer_bytes  # noqa: E402
 from ..i18n import translate as _  # noqa: E402
 from . import style  # noqa: E402
@@ -121,6 +123,7 @@ class TftpTab:
         scroller = Gtk.ScrolledWindow()
         scroller.add(grid)
         self.widget = scroller
+        self.set_interfaces(list_interfaces(include_loopback=True))
         self.update_limits()
 
     # -- helpers ---------------------------------------------------------
@@ -167,6 +170,9 @@ class TftpTab:
         if not root:
             self.window.notice(_("bad_arguments", detail=_("tftp_root")), "error")
             return
+        reason = sensitive_folder_reason(root)
+        if reason and not self.window.ask(_("tftp_exposed_title"), _(f"tftp_exposed_{reason}", folder=root)):
+            return
         args = dict(root=root, port=69, interface=self.interface(),
                     allow_write=self.write_switch.get_active(), max_bytes=self.max_bytes())
         self.window.run_async(
@@ -199,7 +205,8 @@ class TftpTab:
     def _finish_client(self, result, error) -> None:
         if error is not None:
             code = getattr(error, "code", None) or type(error).__name__
-            text = _("client_error", code=code)
+            message = getattr(error, "message", "")
+            text = _("client_error", code=f"{message} ({code})" if message else code)
         else:
             text = _("client_done", bytes=result)
         self.client_status.set_text(text)

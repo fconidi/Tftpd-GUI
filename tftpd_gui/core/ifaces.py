@@ -12,18 +12,23 @@ _SIOCGIFADDR = 0x8915
 _SIOCGIFNETMASK = 0x891B
 
 
-def list_interfaces(sysfs: Path = Path("/sys/class/net")) -> list[str]:
-    """Names of physical-looking interfaces: no loopback, no virtual ones."""
+def list_interfaces(sysfs: Path = Path("/sys/class/net"), include_loopback: bool = False) -> list[str]:
+    """Names of physical-looking interfaces: no virtual ones.
+
+    The loopback is left out unless ``include_loopback`` is set, in which case it comes first.
+    """
     try:
         names = os.listdir(sysfs)
     except OSError:
         return []
-    found = [
+    found = sorted(
         name
         for name in names
         if name != "lo" and os.path.lexists(os.path.join(sysfs, name, "device"))
-    ]
-    return sorted(found)
+    )
+    if include_loopback and "lo" in names:
+        found.insert(0, "lo")
+    return found
 
 
 def _query(sock: socket.socket, request: int, name: bytes) -> str:

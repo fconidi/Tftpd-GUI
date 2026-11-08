@@ -20,6 +20,11 @@ class IfacesTest(unittest.TestCase):
         root = self._sysfs({"lo": True, "docker0": False, "eth0": True})
         self.assertEqual(list_interfaces(root), ["eth0"])
 
+    def test_loopback_is_listed_first_only_when_requested(self):
+        root = self._sysfs({"lo": False, "eth0": True, "docker0": False})
+        self.assertEqual(list_interfaces(root), ["eth0"])
+        self.assertEqual(list_interfaces(root, include_loopback=True), ["lo", "eth0"])
+
     def test_interfaces_are_sorted(self):
         root = self._sysfs({"enp3s0": True, "eth1": True, "eno1": True})
         self.assertEqual(list_interfaces(root), ["eno1", "enp3s0", "eth1"])

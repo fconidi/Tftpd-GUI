@@ -12,7 +12,7 @@ from pathlib import Path
 MODULES = (
     "__init__.py", "__main__.py", "i18n.py", "i18n_gui.py",
     "core/__init__.py", "core/dhcp_packet.py", "core/dhcp_pool.py", "core/dhcp_probe.py",
-    "core/dhcp_server.py", "core/errors.py", "core/ifaces.py", "core/protocol.py",
+    "core/dhcp_server.py", "core/errors.py", "core/exposure.py", "core/ifaces.py", "core/protocol.py",
     "core/safe_open.py", "core/syslog_server.py", "core/tftp_client.py",
     "core/tftp_packet.py", "core/tftp_server.py",
     "gui/__init__.py", "gui/common.py", "gui/dhcp_tab.py", "gui/helper_client.py", "gui/style.py",

@@ -1,12 +1,15 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # noqa: E402
 
+from tftpd_gui.core.tftp_packet import TftpError  # noqa: E402
 from tftpd_gui.core.tftp_server import max_transfer_bytes  # noqa: E402
 from tftpd_gui.gui.helper_client import HelperError  # noqa: E402
 from tftpd_gui.gui.tftp_tab import format_size  # noqa: E402
@@ -74,6 +77,8 @@ class GuiSmokeTest(unittest.TestCase):
             self.puts.append((host, local, remote))
             if remote == "boom":
                 raise OSError("boom")
+            if remote == "denied":
+                raise TftpError(2, "uploads are disabled")
             return 456
 
         self.window = MainWindow(self.helper, clock=self.clock, tftp_get=tftp_get, tftp_put=tftp_put,
@@ -120,6 +125,45 @@ class GuiSmokeTest(unittest.TestCase):
             root="/srv/tftp", port=69, interface="eth0", allow_write=True, max_bytes=64 * 1024 ** 2)))
         self.assertTrue(self.tftp.running)
         self.assertIn("TFTP 69", self.window.status.get_text())
+
+    def test_tftp_interface_menu_offers_all_interfaces_then_loopback(self):
+        names = [row[0] for row in self.tftp.iface_combo.get_model()]
+        self.assertEqual(names[0], translate("all_interfaces"))
+        self.assertEqual(names[1], "lo")
+
+    def test_tftp_start_can_bind_to_the_loopback_interface(self):
+        names = [row[0] for row in self.tftp.iface_combo.get_model()]
+        self.tftp.iface_combo.set_active(names.index("lo"))
+        self.tftp.root_entry.set_text("/srv/tftp")
+        self.helper.results["start_tftp"] = {"port": 69}
+        self.tftp.start()
+        self.assertEqual(self.helper.calls[0][1]["interface"], "lo")
+
+    def test_tftp_start_asks_before_sharing_the_home_directory(self):
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(os.environ, {"HOME": home}):
+            self.tftp.root_entry.set_text(home)
+            self.answers = [False]
+            self.tftp.start()
+        self.assertEqual(len(self.asked), 1)
+        self.assertIn(home, self.asked[0][1])
+        self.assertEqual(self.helper.calls, [])
+        self.assertFalse(self.tftp.running)
+
+    def test_tftp_start_shares_the_home_directory_when_confirmed(self):
+        self.helper.results["start_tftp"] = {"port": 69}
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(os.environ, {"HOME": home}):
+            self.tftp.root_entry.set_text(home)
+            self.answers = [True]
+            self.tftp.start()
+        self.assertEqual(len(self.asked), 1)
+        self.assertEqual(self.helper.names(), ["start_tftp"])
+        self.assertTrue(self.tftp.running)
+
+    def test_tftp_start_does_not_ask_for_an_ordinary_folder(self):
+        self.helper.results["start_tftp"] = {"port": 69}
+        self.tftp.root_entry.set_text("/srv/tftp")
+        self.tftp.start()
+        self.assertEqual(self.asked, [])
 
     def test_tftp_start_without_a_folder_calls_nothing(self):
         self.tftp.start()
@@ -169,6 +213,15 @@ class GuiSmokeTest(unittest.TestCase):
         self.tftp.local_entry.set_text("/tmp/x")
         self.tftp.do_put()
         self.assertIn("OSError", self.tftp.client_status.get_text())
+
+    def test_tftp_client_error_shows_the_server_message_and_code(self):
+        self.tftp.host_entry.set_text("h")
+        self.tftp.remote_entry.set_text("denied")
+        self.tftp.local_entry.set_text("/tmp/x")
+        self.tftp.do_put()
+        text = self.tftp.client_status.get_text()
+        self.assertIn("uploads are disabled", text)
+        self.assertIn("2", text)
 
     def test_tftp_client_with_missing_fields_does_nothing(self):
         self.tftp.do_get()
