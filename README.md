@@ -31,9 +31,9 @@ Start it from the SysLinuxOS Tools menu or run `tftpd-gui`. The service helper r
 
 ## TFTP server and client
 
-Choose a shared folder and network interface, then press **Start**. Other devices can download files from the folder over UDP port 69. Uploads are disabled until you enable **Allow clients to upload files**; an upload cannot replace an existing file. The server rejects absolute names, parent directory traversal and symbolic links. Set a maximum file size before serving large images; the default is 256 MiB.
+Choose a shared folder and a network interface (all of them, one in particular, or `lo` to serve this computer only), then press **Start**. Other devices can download files from the folder over UDP port 69. Uploads are disabled until you enable **Allow clients to upload files**; an upload cannot replace an existing file. The server rejects absolute names, parent directory traversal and symbolic links. Set a maximum file size before serving large images; the default is 256 MiB. TFTP has no authentication, so Tftpd-GUI asks for confirmation before sharing your home folder, one of its parent folders or a folder that holds `.ssh` or `.gnupg`.
 
-The client section can **Get** a file from another server or **Put** a local file there. The transfer table shows peers, file names, directions, byte counts and results. TFTP has a protocol limit of `65535 × block size − 1` bytes, which can be lower than the configured size limit. Blocks above 1428 bytes may fragment on ordinary Ethernet.
+The client section can **Get** a file from another server or **Put** a local file there. If a transfer fails, the message from the server is shown, for example "file not found (1)". The transfer table shows peers, file names, directions, byte counts and results. TFTP has a protocol limit of `65535 × block size − 1` bytes, which can be lower than the configured size limit. Blocks above 1428 bytes may fragment on ordinary Ethernet.
 
 ## Temporary DHCP server
 
@@ -43,7 +43,7 @@ The red banner shows the active server and remaining time. Automatic stop defaul
 
 ## Syslog collector
 
-Press **Start** to receive messages on UDP port 514. Enable TCP listening if your devices send syslog over TCP. Filter by text or minimum severity, then use **Save log to file** to export the visible messages.
+Choose an interface, or leave **All interfaces**, and press **Start** to receive messages on UDP port 514. Enable TCP listening if your devices send syslog over TCP. Filter by text or minimum severity, then use **Save log to file** to export the visible messages.
 
 ## Limits
 
